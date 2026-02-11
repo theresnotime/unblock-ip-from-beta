@@ -1,0 +1,25 @@
+name: "Test the script works"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Make script executable
+        run: chmod +x ./unblock-ip-from-beta.sh
+      
+      - name: Test --version flag
+        run: ./unblock-ip-from-beta.sh --version
