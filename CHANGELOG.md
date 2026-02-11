@@ -1,3 +1,6 @@
+## 1.2.0
+- Added a `--self-update` option to check for script updates and optionally download the latest version
+
 ## 1.1.0
 - Specified IPv4, not much else tbh
 

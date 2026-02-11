@@ -18,6 +18,7 @@ OPTIONS:
     --verbose           Enable verbose output for debugging
     --dry-run           Simulate the process without making changes
     --prefix <PREFIX>   Manually specify the BGP prefix (skips whoisit.sh lookup)
+    --self-update       Check for script updates and optionally download the latest version
 
 ARGUMENTS:
     IPv4_ADDRESS          The IPv4 address to unblock (required)

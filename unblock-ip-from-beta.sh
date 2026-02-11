@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Version
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 # Configuration
 DEPLOYMENT_MEDIAWIKI_HOST="deployment-mediawiki14.deployment-prep.eqiad1.wikimedia.cloud"
@@ -15,6 +15,7 @@ DEPLOYMENT_TEXT_CACHE_HOST="deployment-cache-text08.deployment-prep.eqiad1.wikim
 DEPLOYMENT_UPLOAD_CACHE_HOST="deployment-cache-upload08.deployment-prep.eqiad1.wikimedia.cloud"
 RELOAD_COMMAND="sudo run-puppet-agent && sudo systemctl reload haproxy"
 HIERA_URL="https://raw.githubusercontent.com/wikimedia/cloud-instance-puppet/refs/heads/master/deployment-prep/_.yaml"
+RAW_SCRIPT_URL="https://raw.githubusercontent.com/theresnotime/unblock-ip-from-beta/refs/heads/main"
 EDIT_PUPPET_URL="https://horizon.wikimedia.org/auth/switch/deployment-prep/?next=/project/puppet"
 WIKITECH_HELP_URL="https://wikitech.wikimedia.org/wiki/Nova_Resource:Deployment-prep/Blocking_and_unblocking"
 WIKITECH_SHORT_HELP_URL="https://w.wiki/HpBe"
@@ -59,6 +60,60 @@ print_flag() {
     T_CLEAR="\033[0m"
 
     echo -e "${BOLD}${T_BLUE}T${T_PINK}R${T_WHITE}A${T_PINK}N${T_BLUE}S ${T_BLUE}R${T_PINK}I${T_WHITE}G${T_PINK}H${T_BLUE}T${T_WHITE}S ${T_BLUE}:${T_PINK}3${T_CLEAR}"
+}
+
+# Function to check for script updates by comparing the current version with the latest version available in the GitHub repository.
+check_for_updates() {
+    print_info "Checking for script updates..."
+    # Get latest version
+    LATEST_VERSION=$(curl -s -A "unblock-ip-from-beta script" "$RAW_SCRIPT_URL/unblock-ip-from-beta.sh" | grep -m 1 -oE 'VERSION="[^"]+"' | cut -d'"' -f2)
+    # Get latest changelog
+    LATEST_CHANGELOG=$(curl -s -A "unblock-ip-from-beta script" "$RAW_SCRIPT_URL/CHANGELOG.md" | awk -v ver="## $LATEST_VERSION" '
+       BEGIN { in_section=0 }
+       $0 ~ ver { in_section=1; next }
+       in_section && /^## / { exit }
+       in_section && /^\s*-\s*/ { print }
+    ')
+    # Make easily comparable ^^
+    CURRENT_VERSION_NUM=$(echo "$VERSION" | tr -d '.')
+    LATEST_VERSION_NUM=$(echo "$LATEST_VERSION" | tr -d '.')
+    if [[ "$VERBOSE" == true ]]; then
+        print_verbose "Got version info from $RAW_SCRIPT_URL/unblock-ip-from-beta.sh"
+        print_verbose "Current version: $VERSION (numeric: $CURRENT_VERSION_NUM)"
+        print_verbose "Latest version: $LATEST_VERSION (numeric: $LATEST_VERSION_NUM)"
+        print_verbose "Latest changelog ($LATEST_VERSION):\n$LATEST_CHANGELOG"
+    fi
+    if [[ "$LATEST_VERSION_NUM" -gt "$CURRENT_VERSION_NUM" ]]; then
+        print_info "A new version of the script is available: $LATEST_VERSION (current: $VERSION)"
+        # Print the changelog for the new version if available
+        if [[ -n "$LATEST_CHANGELOG" ]]; then
+            print_info "Changelog for version $LATEST_VERSION:"
+            echo "$LATEST_CHANGELOG" | while read -r line; do
+                echo -e "  ${GREEN}- ${line#*- }${NC}"
+            done
+            echo ""
+        fi
+        echo -ne "${ORANGE}[QUERY]${NC} Do you want to download the latest version? (Y/n) "
+        read -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ || -z "$REPLY" ]]; then
+            print_info "Downloading latest version..."
+            if curl -s -A "unblock-ip-from-beta script" "$RAW_SCRIPT_URL/unblock-ip-from-beta.sh" -o unblock-ip-from-beta-new.sh && [[ -s unblock-ip-from-beta-new.sh ]]; then
+                mv unblock-ip-from-beta-new.sh unblock-ip-from-beta.sh
+                chmod +x unblock-ip-from-beta.sh
+                print_success "Updated to latest version. Please run the script again."
+                exit 0
+            else
+                print_error "Failed to download the latest version. Please try again later or download manually from:"
+                echo "$RAW_SCRIPT_URL/unblock-ip-from-beta.sh"
+                exit 1
+            fi
+        else
+            print_info "OK :)"
+        fi
+    else
+        print_info "You are using the latest version ($LATEST_VERSION) of the script."
+    fi
 }
 
 # Function to check if an IP/network is contained within another network
@@ -221,6 +276,7 @@ OPTIONS:
     --verbose           Enable verbose output for debugging
     --dry-run           Simulate the process without making changes
     --prefix <PREFIX>   Manually specify the BGP prefix (skips whoisit.sh lookup)
+    --self-update       Check for script updates and optionally download the latest version
 
 ARGUMENTS:
     IPv4_ADDRESS          The IPv4 address to unblock (required)
@@ -272,6 +328,10 @@ while [[ $# -gt 0 ]]; do
         --dry-run)
             DRY_RUN=true
             shift
+            ;;
+        --self-update)
+            check_for_updates
+            exit 0
             ;;
         --prefix)
             shift
