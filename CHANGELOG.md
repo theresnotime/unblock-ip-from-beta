@@ -1,3 +1,6 @@
+## 1.3.0
+- Added support for overriding hostnames via environment variables or a .env file.
+
 ## 1.2.1
 - Minor cosmetic updates to the script and README, no functional changes
 

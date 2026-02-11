@@ -62,6 +62,21 @@ and then run it with the IP you want to unblock
 ./unblock-ip-from-beta.sh --verbose --dry-run "27.0.7.0"
 ```
 
+## Configuration
+You can **override** these hosts by setting environment variables or by creating a local .env file in the same directory as the script.
+
+Supported variables:
+- `DEPLOYMENT_MEDIAWIKI_HOST`
+- `DEPLOYMENT_TEXT_CACHE_HOST`
+- `DEPLOYMENT_UPLOAD_CACHE_HOST`
+
+Example .env:
+```bash
+DEPLOYMENT_MEDIAWIKI_HOST="deployment-mediawiki14"
+DEPLOYMENT_TEXT_CACHE_HOST="deployment-cache-text08"
+DEPLOYMENT_UPLOAD_CACHE_HOST="deployment-cache-upload08"
+```
+
 ## Example Output
 ```
 ➜  ./unblock-ip-from-beta.sh --dry-run "27.0.7.0"

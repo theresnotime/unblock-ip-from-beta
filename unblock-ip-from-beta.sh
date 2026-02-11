@@ -7,12 +7,19 @@
 set -euo pipefail
 
 # Version
-VERSION="1.2.1"
+VERSION="1.3.0"
 
 # Configuration
-DEPLOYMENT_MEDIAWIKI_HOST="deployment-mediawiki14.deployment-prep.eqiad1.wikimedia.cloud"
-DEPLOYMENT_TEXT_CACHE_HOST="deployment-cache-text08.deployment-prep.eqiad1.wikimedia.cloud"
-DEPLOYMENT_UPLOAD_CACHE_HOST="deployment-cache-upload08.deployment-prep.eqiad1.wikimedia.cloud"
+if [[ -f .env ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    . ./.env
+    set +a
+fi
+
+DEPLOYMENT_MEDIAWIKI_HOST="${DEPLOYMENT_MEDIAWIKI_HOST:-deployment-mediawiki14.deployment-prep.eqiad1.wikimedia.cloud}"
+DEPLOYMENT_TEXT_CACHE_HOST="${DEPLOYMENT_TEXT_CACHE_HOST:-deployment-cache-text08.deployment-prep.eqiad1.wikimedia.cloud}"
+DEPLOYMENT_UPLOAD_CACHE_HOST="${DEPLOYMENT_UPLOAD_CACHE_HOST:-deployment-cache-upload08.deployment-prep.eqiad1.wikimedia.cloud}"
 RELOAD_COMMAND="sudo run-puppet-agent && sudo systemctl reload haproxy"
 HIERA_URL="https://raw.githubusercontent.com/wikimedia/cloud-instance-puppet/refs/heads/master/deployment-prep/_.yaml"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/theresnotime/unblock-ip-from-beta/refs/heads/main"
@@ -296,6 +303,11 @@ DESCRIPTION:
     4. Updating a local copy of the hiera _.yaml file with the new configuration
     5. Prompting the user to review and save the updated _.yaml file in the hiera config
     6. Running '$RELOAD_COMMAND' on the relevant hosts
+
+CONFIG:
+    - DEPLOYMENT_MEDIAWIKI_HOST: $DEPLOYMENT_MEDIAWIKI_HOST
+    - DEPLOYMENT_TEXT_CACHE_HOST: $DEPLOYMENT_TEXT_CACHE_HOST
+    - DEPLOYMENT_UPLOAD_CACHE_HOST: $DEPLOYMENT_UPLOAD_CACHE_HOST
 
 EOF
 }
