@@ -1,15 +1,15 @@
 # unblock-ip-from-beta.sh
 
-Unblock an IP address from beta cluster by calculating the necessary IP ranges to exclude from blocking configuration - basically just [following the steps outlined on wikitech](https://wikitech.wikimedia.org/wiki/Nova_Resource:Deployment-prep/Blocking_and_unblocking), but automating the process and making it easier to use.
+Unblock an IP address from beta cluster by calculating the necessary IPv4 ranges to exclude from the blocking configuration - basically just [following the steps outlined on wikitech](https://wikitech.wikimedia.org/wiki/Nova_Resource:Deployment-prep/Blocking_and_unblocking), but automating the process and making it easier to use.
 
 I'm not sorry about the in-line Python >:3
 
 ## Help
 ```bash
 ➜  ./unblock-ip-from-beta.sh --help
-Usage: ./unblock-ip-from-beta.sh [OPTIONS] <IP_ADDRESS>
+Usage: ./unblock-ip-from-beta.sh [OPTIONS] <IPv4_ADDRESS>
 
-Unblock an IP address from beta cluster by calculating the necessary IP ranges
+Unblock an IPv4 address from beta cluster by calculating the necessary ranges
 to exclude from blocking configuration.
 
 OPTIONS:
@@ -20,7 +20,7 @@ OPTIONS:
     --prefix <PREFIX>   Manually specify the BGP prefix (skips whoisit.sh lookup)
 
 ARGUMENTS:
-    IP_ADDRESS          The IP address to unblock (required)
+    IPv4_ADDRESS          The IPv4 address to unblock (required)
 
 EXAMPLE:
     ./unblock-ip-from-beta.sh "192.0.2.100"
@@ -37,6 +37,7 @@ DESCRIPTION:
     4. Updating a local copy of the hiera _.yaml file with the new configuration
     5. Prompting the user to review and save the updated _.yaml file in the hiera config
     6. Running 'sudo run-puppet-agent && sudo systemctl reload haproxy' on the relevant hosts
+
 ```
 
 ## Dependencies

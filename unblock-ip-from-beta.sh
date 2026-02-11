@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Version
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # Configuration
 DEPLOYMENT_MEDIAWIKI_HOST="deployment-mediawiki14.deployment-prep.eqiad1.wikimedia.cloud"
@@ -210,9 +210,9 @@ check_dependencies() {
 # Function to display help
 show_help() {
     cat << EOF
-Usage: $0 [OPTIONS] <IP_ADDRESS>
+Usage: $0 [OPTIONS] <IPv4_ADDRESS>
 
-Unblock an IP address from beta cluster by calculating the necessary IP ranges
+Unblock an IPv4 address from beta cluster by calculating the necessary ranges
 to exclude from blocking configuration.
 
 OPTIONS:
@@ -223,7 +223,7 @@ OPTIONS:
     --prefix <PREFIX>   Manually specify the BGP prefix (skips whoisit.sh lookup)
 
 ARGUMENTS:
-    IP_ADDRESS          The IP address to unblock (required)
+    IPv4_ADDRESS          The IPv4 address to unblock (required)
 
 EXAMPLE:
     $0 "192.0.2.100"
@@ -246,7 +246,7 @@ EOF
 
 # Validate input
 if [[ $# -lt 1 ]]; then
-    print_error "Usage: $0 [--verbose] [--dry-run] [--prefix <BGP_PREFIX>] <IP_ADDRESS_TO_UNBLOCK>"
+    print_error "Usage: $0 [--verbose] [--dry-run] [--prefix <BGP_PREFIX>] <IPv4_ADDRESS>"
     echo "Run '$0 --help' for more information"
     handle_error_exit
 fi
@@ -297,9 +297,15 @@ if [[ "$DRY_RUN" == true ]]; then
 fi
 
 if [[ -z "$IP_ADDRESS" ]]; then
-    print_error "IP_ADDRESS_TO_UNBLOCK is required"
-    print_error "Usage: $0 [--verbose] [--dry-run] [--prefix <BGP_PREFIX>] <IP_ADDRESS_TO_UNBLOCK>"
+    print_error "IPv4_ADDRESS is required"
+    print_error "Usage: $0 [--verbose] [--dry-run] [--prefix <BGP_PREFIX>] <IPv4_ADDRESS>"
     echo "Run '$0 --help' for more information"
+    handle_error_exit
+fi
+
+# wtf even is IPv6 anyway
+if [[ "$IP_ADDRESS" == *:* ]]; then
+    print_error "IPv6 addresses are not supported by this script."
     handle_error_exit
 fi
 
@@ -348,9 +354,9 @@ if [[ -z "$BGP_PREFIX" ]]; then
     fi
 else
     # Quick check that the IP_ADDRESS is within the provided BGP_PREFIX
-    print_verbose "Validating that $IP_ADDRESS is within provided BGP prefix $BGP_PREFIX (mistakes happen..!)"
+    print_verbose "Validating that $IP_ADDRESS is within provided prefix $BGP_PREFIX (mistakes happen..!)"
     if ! check_ip_in_range "$BGP_PREFIX" "$IP_ADDRESS"; then
-        print_error "Provided BGP prefix $BGP_PREFIX does not contain IP address $IP_ADDRESS"
+        print_error "Provided prefix $BGP_PREFIX does not contain IP address $IP_ADDRESS"
         handle_error_exit
     fi
     print_info "Using provided BGP prefix"
