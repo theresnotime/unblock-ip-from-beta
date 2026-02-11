@@ -1,3 +1,6 @@
+## 1.2.1
+- Minor cosmetic updates to the script and README, no functional changes
+
 ## 1.2.0
 - Added a `--self-update` option to check for script updates and optionally download the latest version
 

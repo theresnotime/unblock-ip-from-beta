@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Version
-VERSION="1.2.0"
+VERSION="1.2.1"
 
 # Configuration
 DEPLOYMENT_MEDIAWIKI_HOST="deployment-mediawiki14.deployment-prep.eqiad1.wikimedia.cloud"
@@ -38,7 +38,7 @@ print_info() {
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "${GREEN}[OK]${NC} $1"
 }
 
 print_error() {
@@ -268,7 +268,7 @@ show_help() {
 Usage: $0 [OPTIONS] <IPv4_ADDRESS>
 
 Unblock an IPv4 address from beta cluster by calculating the necessary ranges
-to exclude from blocking configuration.
+to exclude a specific IP from blocking configuration.
 
 OPTIONS:
     --help              Show this help message and exit
@@ -291,8 +291,8 @@ DESCRIPTION:
     IP address from the beta cluster blocking configuration by:
 
     1. Determining the BGP prefix for the IP (via whoisit.sh or --prefix)
-    2. Fetching the current blocking ranges from Gerrit
-    3. Calculating new ranges that exclude the target prefix
+    2. Fetching the current blocked ranges from the hiera config
+    3. Calculating new ranges that allow the target IP while still blocking the rest of the original range
     4. Updating a local copy of the hiera _.yaml file with the new configuration
     5. Prompting the user to review and save the updated _.yaml file in the hiera config
     6. Running '$RELOAD_COMMAND' on the relevant hosts
@@ -375,31 +375,31 @@ if ! [[ "$IP_ADDRESS" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; th
     handle_error_exit
 fi
 
+print_info "unblock-ip-from-beta - Version $VERSION"
 print_info "Starting unblock process for IP: $IP_ADDRESS"
 
 # Check SSH connectivity to each host
 for host in "$DEPLOYMENT_MEDIAWIKI_HOST" "$DEPLOYMENT_TEXT_CACHE_HOST" "$DEPLOYMENT_UPLOAD_CACHE_HOST"; do
-    print_info "Checking SSH connectivity to $host..."
+    print_verbose "Checking SSH connectivity to $host..."
     if ! check_ssh_config "$host"; then
         print_error "SSH configuration for $host is not accessible. Please ensure you have SSH access to this host."
         handle_error_exit
     fi
-    print_success "SSH connectivity to $host is working"
+    print_success "SSH connectivity to $host is OK"
 done
 
 # Check if HIERA_URL is accessible
-print_info "Checking connectivity to the HIERA_URL..."
+print_verbose "Checking connectivity to the hiera config mirror on GitHub..."
 HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -A "unblock-ip-from-beta script" "$HIERA_URL")
 if [[ "$HTTP_STATUS" != "200" ]]; then
-    print_error "Cannot access HIERA_URL: $HIERA_URL (HTTP status: $HTTP_STATUS)"
+    print_error "Cannot access the mirror: $HIERA_URL (HTTP status: $HTTP_STATUS)"
     handle_error_exit
 fi
-print_success "HIERA_URL is accessible"
+print_success "Hiera config mirror is accessible"
 
 # Step 1: SSH to host and run whoisit.sh to get BGP prefix (if not provided)
 if [[ -z "$BGP_PREFIX" ]]; then
-    print_info "Connecting to $DEPLOYMENT_MEDIAWIKI_HOST and retrieving BGP prefix..."
-    print_verbose "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./whoisit.sh $IP_ADDRESS'"
+    print_info "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./whoisit.sh $IP_ADDRESS'"
     if [[ "$VERBOSE" == true ]]; then
         SSH_OUTPUT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './whoisit.sh $IP_ADDRESS'" 2>&1)
         print_verbose "SSH Output:\n$SSH_OUTPUT"
@@ -425,8 +425,8 @@ fi
 
 print_success "BGP prefix retrieved: $BGP_PREFIX"
 
-# Step 2: Fetch the YAML file from Gerrit and find matching range
-print_info "Fetching blocking ranges from Gerrit..."
+# Step 2: Fetch the YAML file from hiera and find matching range
+print_info "Fetching blocked ranges from the hiera config mirror..."
 print_verbose "URL: $HIERA_URL"
 HIERA_CONTENT=$(curl -s -A "unblock-ip-from-beta script" "$HIERA_URL" | tail -n +6 | sed '$d')
 
@@ -440,7 +440,7 @@ if [[ "$VERBOSE" == true ]]; then
 fi
 
 if [[ -z "$HIERA_CONTENT" ]]; then
-    print_error "Failed to fetch YAML from Gerrit"
+    print_error "Failed to fetch YAML from the hiera config mirror"
     echo $HIERA_CONTENT
     handle_error_exit
 fi
@@ -471,13 +471,12 @@ if [[ "$VERBOSE" == true ]]; then
 fi
 
 if [[ -z "$MATCHING_RANGE" ]]; then
-    print_error "No matching IP range found in Gerrit for $BGP_PREFIX"
+    print_error "No matching IP range found in the hiera config for $BGP_PREFIX"
     handle_error_exit
 fi
 
 # Step 3: SSH to host and run subtractNetworks.py
-print_info "Running subtractNetworks.py to calculate allowed ranges..."
-print_verbose "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'"
+print_info "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'"
 if [[ "$VERBOSE" == true ]]; then
     RESULT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'" 2>&1)
     print_verbose "SSH Output:\n$RESULT"
@@ -486,7 +485,7 @@ else
 fi
 
 if [[ -z "$RESULT" ]]; then
-    print_error "Failed to run subtractNetworks.py"
+    print_error "Failed to run subtractNetworks.py or no output received"
     handle_error_exit
 fi
 
@@ -494,18 +493,18 @@ fi
 RANGES_TO_ADD=$(echo "$RESULT" | grep -E '^\s*-\s*[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}')
 
 # Update _.yaml by replacing MATCHING_RANGE with RANGES_TO_ADD
-print_info "Updating _.yaml with new ranges..."
+print_info "Updating local _.yaml with new ranges and removing old range..."
 print_verbose "Replacing $MATCHING_RANGE with calculated ranges"
 
 if ! replace_range_in_yaml "$MATCHING_RANGE" "$RANGES_TO_ADD"; then
-    print_error "Failed to update _.yaml file"
+    print_error "Failed to update local _.yaml file"
     print_error "Manual intervention may be required!"
     echo "Here are the ranges to replace $MATCHING_RANGE with:"
     echo "$RANGES_TO_ADD"
     handle_error_exit
 fi
 
-print_success "Updated _.yaml file"
+print_success "Updated local _.yaml file"
 
 # Step 4: Output result
 print_success "Unblocking calculation complete"
@@ -518,33 +517,32 @@ echo "Replaced with:"
 echo ""
 echo "$RANGES_TO_ADD"
 echo "----"
-echo "Please review the updated _.yaml file and save it in the \"deployment-prep\" hiera config"
-echo "($EDIT_PUPPET_URL)"
+echo "Please review the updated local _.yaml file and save it in the \"deployment-prep\" hiera config"
+echo "at $EDIT_PUPPET_URL"
+echo "and then press Enter to continue"
 
-# Prompt the user to press enter when done
-echo -ne "${ORANGE}Press Enter to continue after you've saved the changes...${NC}"
 read -r
 echo ""
 
 # Run 'sudo run-puppet-agent && sudo systemctl reload haproxy' on each host
 for host in "$DEPLOYMENT_TEXT_CACHE_HOST" "$DEPLOYMENT_UPLOAD_CACHE_HOST"; do
     # Tell the user what is about to happen and ask for confirmation before running the command
-    echo -ne "${ORANGE}[QUERY]${NC} About to run '$RELOAD_COMMAND' on $host. Do you want to proceed? (Y/n) "
+    echo -ne "${ORANGE}[QUERY]${NC} About to run '$RELOAD_COMMAND' on ${host%%.*}. Do you want to proceed? (Y/n) "
     read -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ || -z "$REPLY" ]]; then
-        print_info "Proceeding with $host..."
+        print_info "Proceeding with ${host%%.*}..."
     else
-        print_info "Skipping $host..."
+        print_info "Skipping ${host%%.*}..."
         continue
     fi
-    print_info "Running '$RELOAD_COMMAND' on $host..."
+    print_info "Running '$RELOAD_COMMAND' on ${host%%.*}..."
     if [[ "$DRY_RUN" == true ]]; then
-        print_verbose "DRY RUN: Would run '$RELOAD_COMMAND' on $host"
+        print_verbose "DRY RUN: Would run '$RELOAD_COMMAND' on ${host%%.*}"
         continue
     fi
     ssh "$host" "$RELOAD_COMMAND"
-    print_success "Commands executed successfully on $host"
+    print_success "Commands executed successfully on ${host%%.*}"
 done
 
 # Cleanup
