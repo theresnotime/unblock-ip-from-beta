@@ -282,7 +282,7 @@ OPTIONS:
     --version           Show version information and exit
     --verbose           Enable verbose output for debugging
     --dry-run           Simulate the process without making changes
-    --prefix <PREFIX>   Manually specify the BGP prefix (skips whoisit.sh lookup)
+    --prefix <PREFIX>   Manually specify the BGP prefix (skips whois lookup)
     --self-update       Check for script updates and optionally download the latest version
 
 ARGUMENTS:
@@ -297,7 +297,7 @@ DESCRIPTION:
     This script automates the process ($WIKITECH_SHORT_HELP_URL) of unblocking an
     IP address from the beta cluster blocking configuration by:
 
-    1. Determining the BGP prefix for the IP (via whoisit.sh or --prefix)
+    1. Determining the BGP prefix for the IP (via whois or --prefix)
     2. Fetching the current blocked ranges from the hiera config
     3. Calculating new ranges that allow the target IP while still blocking the rest of the original range
     4. Updating a local copy of the hiera _.yaml file with the new configuration
@@ -409,19 +409,19 @@ if [[ "$HTTP_STATUS" != "200" ]]; then
 fi
 print_success "Hiera config mirror is accessible"
 
-# Step 1: SSH to host and run whoisit.sh to get BGP prefix (if not provided)
+# Step 1: run whois to get BGP prefix (if not provided)
 if [[ -z "$BGP_PREFIX" ]]; then
-    print_info "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./whoisit.sh $IP_ADDRESS'"
+    print_info "Running: whois -h bgp.tools $IP_ADDRESS"
     if [[ "$VERBOSE" == true ]]; then
-        SSH_OUTPUT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './whoisit.sh $IP_ADDRESS'" 2>&1)
-        print_verbose "SSH Output:\n$SSH_OUTPUT"
-        BGP_PREFIX=$(echo "$SSH_OUTPUT" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
+        WHOIS_OUTPUT=$(whois -h bgp.tools "$IP_ADDRESS" 2>&1)
+        print_verbose "WHOIS Output:\n$WHOIS_OUTPUT"
+        BGP_PREFIX=$(echo "$WHOIS_OUTPUT" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
     else
-        BGP_PREFIX=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './whoisit.sh $IP_ADDRESS'" 2>/dev/null | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
+        BGP_PREFIX=$(whois -h bgp.tools "$IP_ADDRESS" 2>/dev/null | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
     fi
 
     if [[ -z "$BGP_PREFIX" ]]; then
-        print_error "Failed to retrieve BGP prefix from whoisit.sh"
+        print_error "Failed to retrieve BGP prefix from whois"
         handle_error_exit
     fi
 else
@@ -432,7 +432,7 @@ else
         handle_error_exit
     fi
     print_info "Using provided BGP prefix"
-    print_verbose "Skipping whoisit.sh step"
+    print_verbose "Skipping whois step"
 fi
 
 print_success "BGP prefix retrieved: $BGP_PREFIX"
