@@ -20,6 +20,7 @@ fi
 DEPLOYMENT_MEDIAWIKI_HOST="${DEPLOYMENT_MEDIAWIKI_HOST:-deployment-mediawiki14.deployment-prep.eqiad1.wikimedia.cloud}"
 DEPLOYMENT_TEXT_CACHE_HOST="${DEPLOYMENT_TEXT_CACHE_HOST:-deployment-cache-text08.deployment-prep.eqiad1.wikimedia.cloud}"
 DEPLOYMENT_UPLOAD_CACHE_HOST="${DEPLOYMENT_UPLOAD_CACHE_HOST:-deployment-cache-upload08.deployment-prep.eqiad1.wikimedia.cloud}"
+USER_AGENT="unblock-ip-from-beta script"
 RELOAD_COMMAND="sudo run-puppet-agent && sudo systemctl reload haproxy"
 HIERA_URL="https://raw.githubusercontent.com/wikimedia/cloud-instance-puppet/refs/heads/master/deployment-prep/_.yaml"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/theresnotime/unblock-ip-from-beta/refs/heads/main"
@@ -73,9 +74,9 @@ print_flag() {
 check_for_updates() {
     print_info "Checking for script updates..."
     # Get latest version
-    LATEST_VERSION=$(curl -s -A "unblock-ip-from-beta script" "$RAW_SCRIPT_URL/unblock-ip-from-beta.sh" | grep -m 1 -oE 'VERSION="[^"]+"' | cut -d'"' -f2)
+    LATEST_VERSION=$(curl -s -A "$USER_AGENT" "$RAW_SCRIPT_URL/unblock-ip-from-beta.sh" | grep -m 1 -oE 'VERSION="[^"]+"' | cut -d'"' -f2)
     # Get latest changelog
-    LATEST_CHANGELOG=$(curl -s -A "unblock-ip-from-beta script" "$RAW_SCRIPT_URL/CHANGELOG.md" | awk -v ver="## $LATEST_VERSION" '
+    LATEST_CHANGELOG=$(curl -s -A "$USER_AGENT" "$RAW_SCRIPT_URL/CHANGELOG.md" | awk -v ver="## $LATEST_VERSION" '
        BEGIN { in_section=0 }
        $0 ~ ver { in_section=1; next }
        in_section && /^## / { exit }
@@ -105,7 +106,7 @@ check_for_updates() {
         echo ""
         if [[ $REPLY =~ ^[Yy]$ || -z "$REPLY" ]]; then
             print_info "Downloading latest version..."
-            if curl -s -A "unblock-ip-from-beta script" "$RAW_SCRIPT_URL/unblock-ip-from-beta.sh" -o unblock-ip-from-beta-new.sh && [[ -s unblock-ip-from-beta-new.sh ]]; then
+            if curl -s -A "$USER_AGENT" "$RAW_SCRIPT_URL/unblock-ip-from-beta.sh" -o unblock-ip-from-beta-new.sh && [[ -s unblock-ip-from-beta-new.sh ]]; then
                 mv unblock-ip-from-beta-new.sh unblock-ip-from-beta.sh
                 chmod +x unblock-ip-from-beta.sh
                 print_success "Updated to latest version. Please run the script again."
@@ -282,7 +283,7 @@ OPTIONS:
     --version           Show version information and exit
     --verbose           Enable verbose output for debugging
     --dry-run           Simulate the process without making changes
-    --prefix <PREFIX>   Manually specify the BGP prefix (skips whoisit.sh lookup)
+    --prefix <PREFIX>   Manually specify the BGP prefix (skips whois lookup)
     --self-update       Check for script updates and optionally download the latest version
 
 ARGUMENTS:
@@ -297,7 +298,7 @@ DESCRIPTION:
     This script automates the process ($WIKITECH_SHORT_HELP_URL) of unblocking an
     IP address from the beta cluster blocking configuration by:
 
-    1. Determining the BGP prefix for the IP (via whoisit.sh or --prefix)
+    1. Determining the BGP prefix for the IP (via whois or --prefix)
     2. Fetching the current blocked ranges from the hiera config
     3. Calculating new ranges that allow the target IP while still blocking the rest of the original range
     4. Updating a local copy of the hiera _.yaml file with the new configuration
@@ -402,26 +403,26 @@ done
 
 # Check if HIERA_URL is accessible
 print_verbose "Checking connectivity to the hiera config mirror on GitHub..."
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -A "unblock-ip-from-beta script" "$HIERA_URL")
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -A "$USER_AGENT" "$HIERA_URL")
 if [[ "$HTTP_STATUS" != "200" ]]; then
     print_error "Cannot access the mirror: $HIERA_URL (HTTP status: $HTTP_STATUS)"
     handle_error_exit
 fi
 print_success "Hiera config mirror is accessible"
 
-# Step 1: SSH to host and run whoisit.sh to get BGP prefix (if not provided)
+# Step 1: run whois to get BGP prefix (if not provided)
 if [[ -z "$BGP_PREFIX" ]]; then
-    print_info "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./whoisit.sh $IP_ADDRESS'"
+    print_info "Running: whois -h bgp.tools $IP_ADDRESS"
     if [[ "$VERBOSE" == true ]]; then
-        SSH_OUTPUT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './whoisit.sh $IP_ADDRESS'" 2>&1)
-        print_verbose "SSH Output:\n$SSH_OUTPUT"
-        BGP_PREFIX=$(echo "$SSH_OUTPUT" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
+        WHOIS_OUTPUT=$(whois -h bgp.tools "$IP_ADDRESS" 2>&1)
+        print_verbose "WHOIS Output:\n$WHOIS_OUTPUT"
+        BGP_PREFIX=$(echo "$WHOIS_OUTPUT" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
     else
-        BGP_PREFIX=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './whoisit.sh $IP_ADDRESS'" 2>/dev/null | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
+        BGP_PREFIX=$(whois -h bgp.tools "$IP_ADDRESS" 2>/dev/null | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
     fi
 
     if [[ -z "$BGP_PREFIX" ]]; then
-        print_error "Failed to retrieve BGP prefix from whoisit.sh"
+        print_error "Failed to retrieve BGP prefix from whois"
         handle_error_exit
     fi
 else
@@ -432,7 +433,7 @@ else
         handle_error_exit
     fi
     print_info "Using provided BGP prefix"
-    print_verbose "Skipping whoisit.sh step"
+    print_verbose "Skipping whois step"
 fi
 
 print_success "BGP prefix retrieved: $BGP_PREFIX"
@@ -440,7 +441,7 @@ print_success "BGP prefix retrieved: $BGP_PREFIX"
 # Step 2: Fetch the YAML file from hiera and find matching range
 print_info "Fetching blocked ranges from the hiera config mirror..."
 print_verbose "URL: $HIERA_URL"
-HIERA_CONTENT=$(curl -s -A "unblock-ip-from-beta script" "$HIERA_URL" | tail -n +6 | sed '$d')
+HIERA_CONTENT=$(curl -s -A "$USER_AGENT" "$HIERA_URL" | tail -n +6 | sed '$d')
 
 # Save YAML content to file
 echo "$HIERA_CONTENT" > _.yaml
