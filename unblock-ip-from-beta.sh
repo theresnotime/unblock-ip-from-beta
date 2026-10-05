@@ -17,9 +17,9 @@ if [[ -f .env ]]; then
     set +a
 fi
 
-DEPLOYMENT_MEDIAWIKI_HOST="${DEPLOYMENT_MEDIAWIKI_HOST:-deployment-mediawiki14.deployment-prep.eqiad1.wikimedia.cloud}"
-DEPLOYMENT_TEXT_CACHE_HOST="${DEPLOYMENT_TEXT_CACHE_HOST:-deployment-cache-text08.deployment-prep.eqiad1.wikimedia.cloud}"
-DEPLOYMENT_UPLOAD_CACHE_HOST="${DEPLOYMENT_UPLOAD_CACHE_HOST:-deployment-cache-upload08.deployment-prep.eqiad1.wikimedia.cloud}"
+DEPLOYMENT_MEDIAWIKI_HOST="${DEPLOYMENT_MEDIAWIKI_HOST:-deployment-mediawiki16.deployment-prep.eqiad1.wikimedia.cloud}"
+DEPLOYMENT_TEXT_CACHE_HOST="${DEPLOYMENT_TEXT_CACHE_HOST:-deployment-cp-text09.deployment-prep.eqiad1.wikimedia.cloud}"
+DEPLOYMENT_UPLOAD_CACHE_HOST="${DEPLOYMENT_UPLOAD_CACHE_HOST:-deployment-cp-upload09.deployment-prep.eqiad1.wikimedia.cloud}"
 RELOAD_COMMAND="sudo run-puppet-agent && sudo systemctl reload haproxy"
 HIERA_URL="https://raw.githubusercontent.com/wikimedia/cloud-instance-puppet/refs/heads/master/deployment-prep/_.yaml"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/theresnotime/unblock-ip-from-beta/refs/heads/main"
@@ -411,13 +411,13 @@ print_success "Hiera config mirror is accessible"
 
 # Step 1: SSH to host and run whoisit.sh to get BGP prefix (if not provided)
 if [[ -z "$BGP_PREFIX" ]]; then
-    print_info "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./whoisit.sh $IP_ADDRESS'"
+    print_info "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./block-tools/whoisit.sh $IP_ADDRESS'"
     if [[ "$VERBOSE" == true ]]; then
-        SSH_OUTPUT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './whoisit.sh $IP_ADDRESS'" 2>&1)
+        SSH_OUTPUT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './block-tools/whoisit.sh $IP_ADDRESS'" 2>&1)
         print_verbose "SSH Output:\n$SSH_OUTPUT"
         BGP_PREFIX=$(echo "$SSH_OUTPUT" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
     else
-        BGP_PREFIX=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './whoisit.sh $IP_ADDRESS'" 2>/dev/null | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
+        BGP_PREFIX=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './block-tools/whoisit.sh $IP_ADDRESS'" 2>/dev/null | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}' | head -1)
     fi
 
     if [[ -z "$BGP_PREFIX" ]]; then
@@ -488,12 +488,12 @@ if [[ -z "$MATCHING_RANGE" ]]; then
 fi
 
 # Step 3: SSH to host and run subtractNetworks.py
-print_info "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'"
+print_info "Running: ssh $DEPLOYMENT_MEDIAWIKI_HOST 'sudo -i bash -c ./block-tools/subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'"
 if [[ "$VERBOSE" == true ]]; then
-    RESULT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'" 2>&1)
+    RESULT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './block-tools/subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'" 2>&1)
     print_verbose "SSH Output:\n$RESULT"
 else
-    RESULT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'" 2>/dev/null)
+    RESULT=$(ssh "$DEPLOYMENT_MEDIAWIKI_HOST" "sudo -i bash -c './block-tools/subtractNetworks.py $MATCHING_RANGE $BGP_PREFIX'" 2>/dev/null)
 fi
 
 if [[ -z "$RESULT" ]]; then
